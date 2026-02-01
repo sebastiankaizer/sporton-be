@@ -1,67 +1,56 @@
 import mongoose, { Schema, Document } from "mongoose";
 import bcrypt from "bcrypt";
 
-export type UserRole = "admin" | "user";
-
 export interface IUser extends Document {
   email: string;
   password: string;
   name: string;
-  role: UserRole;
-  isAdmin: boolean;
-  comparePassword(candidate: string): Promise<boolean>;
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(password: string): Promise<boolean>;
 }
 
-const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 10;
-
-const UserSchema = new Schema<IUser>(
+const UserSchema: Schema = new Schema(
   {
-    email: {
-      type: String,
-      required: true,
-      unique: true,
+    name: { 
+      type: String, 
+      required: [true, "Name is required"],
+      trim: true 
+    },
+    email: { 
+      type: String, 
+      required: [true, "Email is required"], 
+      unique: true, // Ini sudah otomatis membuat index unik
       trim: true,
       lowercase: true,
+      match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, "Please fill a valid email address"],
     },
-    password: {
-      type: String,
-      required: true,
-      select: false,
-      minlength: 8,
-    },
-    name: {
-      type: String,
-      required: true,
-      trim: true,
-      minlength: 2,
-    },
-    role: {
-      type: String,
-      enum: ["admin", "user"],
-      default: "user",
-      required: true,
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
-      required: true,
+    password: { 
+      type: String, 
+      required: [true, "Password is required"],
+      minlength: [6, "Password must be at least 6 characters long"],
+      select: false 
     },
   },
-  { timestamps: true, versionKey: false }
+  { 
+    timestamps: true,
+    versionKey: false 
+  },
 );
 
-UserSchema.pre("save", async function (this: IUser) {
+UserSchema.pre<IUser>("save", async function () {
   if (!this.isModified("password")) return;
-  this.password = await bcrypt.hash(this.password, BCRYPT_ROUNDS);
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+  } catch (error: any) {
+    throw error;
+  }
 });
 
-UserSchema.methods.comparePassword = async function (
-  this: IUser,
-  candidate: string
-) {
-  return bcrypt.compare(candidate, this.password);
+UserSchema.methods.comparePassword = async function (password: string): Promise<boolean> {
+  return bcrypt.compare(password, this.password);
 };
 
-UserSchema.index({ email: 1 }, { unique: true });
-
+// Hapus manual index email:1 di sini agar tidak duplicate warning
 export default mongoose.model<IUser>("User", UserSchema);

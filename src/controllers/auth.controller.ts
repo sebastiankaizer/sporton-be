@@ -1,114 +1,129 @@
 import { Request, Response } from "express";
-import jwt, { Secret } from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import jwt from "jsonwebtoken";
 import User from "../models/user.model";
 
-const JWT_SECRET = process.env.JWT_SECRET as Secret | undefined;
-if (!JWT_SECRET) throw new Error("JWT_SECRET is not defined");
+const JWT_SECRET = process.env.JWT_SECRET || "Sporton123";
 
-const JWT_EXPIRES_SECONDS = 60 * 60 * 24;
-
-const isNonEmptyString = (v: unknown): v is string =>
-  typeof v === "string" && v.trim().length > 0;
-
-export const signin = async (req: Request, res: Response): Promise<Response> => {
+/**
+ * @description Handle User Sign In
+ * @route POST /api/auth/signin
+ */
+export const signin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body as {
-      email?: unknown;
-      password?: unknown;
-    };
+    const { email, password } = req.body;
 
-    if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
-      return res.status(400).json({ message: "Email and password are required" });
+    if (!email || !password) {
+      res.status(400).json({ 
+        success: false,
+        message: "Please provide both email and password" 
+      });
+      return;
     }
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() }).select(
-      "+password"
-    );
+    /**
+     * PERBAIKAN DI SINI:
+     * Karena di model user.password kita set { select: false }, 
+     * kita harus memanggilnya secara manual menggunakan .select("+password")
+     * agar bcrypt bisa membandingkan teks dengan hash-nya.
+     */
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
-      return res.status(401).json({ message: "Invalid credentials" });
+      res.status(401).json({ 
+        success: false, 
+        message: "Invalid Credentials" 
+      });
+      return;
     }
 
-    const ok = await user.comparePassword(password);
-    if (!ok) {
-      return res.status(401).json({ message: "Invalid credentials" });
+    // Bandingkan password
+    const isMatch = await bcrypt.compare(password, user.password);
+    
+    if (!isMatch) {
+      res.status(401).json({ 
+        success: false, 
+        message: "Invalid Credentials" 
+      });
+      return;
     }
 
     const token = jwt.sign(
-      { sub: String(user._id), email: user.email },
-      JWT_SECRET,
-      { expiresIn: JWT_EXPIRES_SECONDS }
+      { id: user._id, email: user.email }, 
+      JWT_SECRET, 
+      { expiresIn: "1d" }
     );
 
-    return res.status(200).json({
-      token,
+    res.status(200).json({
+      success: true,
+      message: "Authentication successful",
+      token: token,
       user: {
-        id: String(user._id),
+        id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role,
-        isAdmin: user.isAdmin,
       },
     });
+
   } catch (error) {
-    console.error("Signin error:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    console.error("Signin Error Details: ", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Internal Server Error" 
+    });
   }
 };
 
-export const initiateAdmin = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
+/**
+ * @description Initialize First Admin User (Hanya bisa dilakukan jika DB kosong)
+ * @route POST /api/auth/initiate-admin
+ */
+export const initiateAdmin = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, name } = req.body as {
-      email?: unknown;
-      password?: unknown;
-      name?: unknown;
-    };
+    const { email, password, name } = req.body;
 
-    if (
-      !isNonEmptyString(email) ||
-      !isNonEmptyString(password) ||
-      !isNonEmptyString(name)
-    ) {
-      return res
-        .status(400)
-        .json({ message: "Name, email, and password are required" });
-    }
-
-    const existingCount = await User.estimatedDocumentCount();
-    if (existingCount > 0) {
-      return res.status(409).json({
-        message:
-          "Admin already initialized. Delete all users from database to re-initialize.",
+    if (!email || !password || !name) {
+      res.status(400).json({ 
+        success: false,
+        message: "All fields (email, password, name) must be filled" 
       });
+      return;
     }
 
-    const created = await User.create({
-      email: email.trim().toLowerCase(),
-      password,
-      name: name.trim(),
-      role: "admin",
-      isAdmin: true,
-    });
-
-    return res.status(201).json({
-      message: "Admin user created successfully",
-      user: {
-        id: String(created._id),
-        name: created.name,
-        email: created.email,
-        role: created.role,
-        isAdmin: created.isAdmin,
-      },
-    });
-  } catch (error: any) {
-    if (error?.code === 11000) {
-      return res.status(409).json({ message: "Email already exists" });
+    const userCount = await User.countDocuments({});
+    
+    if (userCount > 0) {
+      res.status(400).json({
+        success: false,
+        message: "Initialization Denied: System already has an admin user. Delete manually from DB if you wish to reset.",
+      });
+      return;
     }
 
-    console.error("Initiate admin error:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    /**
+     * CATATAN: 
+     * Kamu sebenarnya tidak perlu melakukan hashing manual di sini 
+     * karena kita sudah punya Pre-save hook di user.model.ts yang 
+     * otomatis meng-hash password sebelum disimpan ke database.
+     */
+    const adminUser = new User({
+      email: email,
+      password: password, // Pre-save hook di model akan menghash ini otomatis
+      name: name,
+    });
+
+    await adminUser.save();
+
+    res.status(201).json({ 
+      success: true,
+      message: "First Admin user created successfully! Please proceed to login." 
+    });
+
+  } catch (error) {
+    console.error("Initiate Admin Error Details: ", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Internal Server Error" 
+    });
   }
 };

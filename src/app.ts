@@ -1,105 +1,64 @@
-import express, { Request, Response, NextFunction } from "express";
+import express, { Application, Request, Response, NextFunction } from "express";
 import cors from "cors";
-import helmet from "helmet";
-import rateLimit from "express-rate-limit";
-import morgan from "morgan";
-import { randomUUID } from "crypto";
-
+import path from "path";
 import authRoutes from "./routes/auth.routes";
+import categoryRoutes from "./routes/category.routes";
+import productRoutes from "./routes/product.routes";
 import { authenticate } from "./middlewares/auth.middleware";
 
-declare global {
-  namespace Express {
-    interface Request {
-      requestId?: string;
-    }
-  }
-}
+const app: Application = express();
 
-const app = express();
+// --- Konfigurasi Middleware ---
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-app.set("trust proxy", 1);
+// Biar folder uploads bisa diakses lewat link (buat nampilin gambar produk)
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
-app.use((req: Request, res: Response, next: NextFunction) => {
-  const requestId = req.headers["x-request-id"]?.toString() || randomUUID();
-  res.setHeader("x-request-id", requestId);
-  req.requestId = requestId;
-  next();
-});
+// --- Registrasi Semua Route ---
+app.use("/api/auth", authRoutes);
+app.use("/api/categories", categoryRoutes);
+app.use("/api/products", productRoutes);
 
-app.use(helmet());
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
-
-app.use(
-  rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 200,
-  })
-);
-
-const allowedOrigins = (process.env.CLIENT_URL || "")
-  .split(",")
-  .map((o) => o.trim())
-  .filter(Boolean);
-
-app.use(
-  cors({
-    origin: (
-      origin: string | undefined,
-      callback: (err: Error | null, allow?: boolean) => void
-    ) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.length === 0) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      return callback(new Error("CORS_NOT_ALLOWED"));
-    },
-    credentials: true,
-  })
-);
-
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: true, limit: "1mb" }));
-
-app.get("/health", (req: Request, res: Response) => {
+// Cek kalau API nyala
+app.get("/", (req: Request, res: Response) => {
   res.status(200).json({
-    status: "ok",
-    service: "Sporton Backend API",
-    requestId: req.requestId,
+    success: true,
+    message: "Aman, API Sporton sudah jalan.",
+    version: "1.0.0"
   });
 });
 
-app.use("/api/auth", authRoutes);
-
+// Buat ngetes token doang
 app.get("/test-middleware", authenticate, (req: Request, res: Response) => {
   res.status(200).json({
-    message: "Authorized",
-    user: req.user ?? null,
+    success: true,
+    message: "Token valid, kamu punya akses!",
+    user: (req as any).user
   });
 });
 
+// --- Handling Error & Route Ghoib ---
+
+// Kalau user nembak route yang nggak ada
 app.use((req: Request, res: Response) => {
   res.status(404).json({
-    message: "Route not found",
-    path: req.originalUrl,
+    success: false,
+    message: `URL ${req.originalUrl} nggak ketemu.`
   });
 });
 
-app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-  if (err?.message === "CORS_NOT_ALLOWED") {
-    return res.status(403).json({ message: "CORS blocked" });
-  }
-
-  const statusCode = Number(err?.statusCode) || 500;
-
-  if (process.env.NODE_ENV !== "production") {
-    console.error(err);
-  }
-
-  return res.status(statusCode).json({
-    message:
-      process.env.NODE_ENV === "production"
-        ? "Internal Server Error"
-        : err?.message || "Internal Server Error",
+// Jaring pengaman kalau ada error di server (Internal Server Error)
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const status = err.status || 500;
+  console.error("Waduh, ada error nih:", err.message);
+  
+  res.status(status).json({
+    success: false,
+    message: err.message || "Terjadi kesalahan di server.",
+    // Stack trace cuma muncul pas lagi development
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined
   });
 });
 

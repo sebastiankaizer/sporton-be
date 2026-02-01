@@ -1,185 +1,174 @@
 {
   "info": {
-    "name": "Sporton Backend API",
-    "description": "API Documentation for Sporton Backend (Express + TypeScript).",
+    "name": "Sporton API - Ultimate Collection",
+    "description": "Full Documentation for Sporton Backend. Includes Auth, Category CRUD, and Product CRUD with File Upload support.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "BASE_URL",
-      "value": "http://localhost:5001",
-      "type": "string"
-    },
-    {
-      "key": "TOKEN",
-      "value": "",
-      "type": "string"
-    }
+    { "key": "BASE_URL", "value": "http://localhost:5001", "type": "string" },
+    { "key": "TOKEN", "value": "", "type": "string" }
   ],
   "item": [
     {
-      "name": "General",
+      "name": "01. Auth & System",
       "item": [
         {
           "name": "Health Check",
           "request": {
             "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{BASE_URL}}/health",
-              "host": ["{{BASE_URL}}"],
-              "path": ["health"]
-            }
-          },
+            "url": { "raw": "{{BASE_URL}}/", "host": ["{{BASE_URL}}"], "path": [""] }
+          }
+        },
+        {
+          "name": "Initiate Admin",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Admin Sporton\",\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"Sporton123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{BASE_URL}}/api/auth/initiate-admin-user", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "initiate-admin-user"] }
+          }
+        },
+        {
+          "name": "Login Admin",
           "event": [
             {
               "listen": "test",
               "script": {
-                "type": "text/javascript",
                 "exec": [
-                  "pm.test('Health check should return 200', function () {",
-                  "  pm.response.to.have.status(200);",
-                  "});"
-                ]
-              }
-            }
-          ],
-          "response": []
-        },
-        {
-          "name": "Test Middleware (Protected)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{TOKEN}}",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{BASE_URL}}/test-middleware",
-              "host": ["{{BASE_URL}}"],
-              "path": ["test-middleware"]
-            }
-          },
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const token = pm.collectionVariables.get('TOKEN') || pm.environment.get('TOKEN');",
-                  "if (!token) {",
-                  "  console.warn('TOKEN is empty. Run Auth -> Sign In first.');",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.token) {",
+                  "  pm.collectionVariables.set('TOKEN', jsonData.token);",
+                  "  console.log('Token saved to variable!');",
                   "}"
-                ]
+                ],
+                "type": "text/javascript"
               }
             }
           ],
-          "response": []
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"Sporton123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{BASE_URL}}/api/auth/signin", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "signin"] }
+          }
         }
       ]
     },
     {
-      "name": "Auth",
+      "name": "02. Categories",
       "item": [
         {
-          "name": "Initiate Admin User (First Time)",
+          "name": "Get All Categories",
           "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Admin User\",\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"password123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{BASE_URL}}/api/auth/initiate-admin-user",
-              "host": ["{{BASE_URL}}"],
-              "path": ["api", "auth", "initiate-admin-user"]
-            }
-          },
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Initiate admin should return 201 (created) or 409 (already initialized)', function () {",
-                  "  pm.expect([201, 409]).to.include(pm.response.code);",
-                  "});",
-                  "if (pm.response.code === 409) {",
-                  "  console.warn('Admin already exists. Use the correct credentials on Sign In, or clear users collection if you want to re-init.');",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "response": []
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/categories", "host": ["{{BASE_URL}}"], "path": ["api", "categories"] }
+          }
         },
         {
-          "name": "Sign In",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Sign In should return 200', function () {",
-                  "  pm.response.to.have.status(200);",
-                  "});",
-                  "const jsonData = pm.response.json();",
-                  "pm.test('Token should exist in response', function () {",
-                  "  pm.expect(jsonData).to.have.property('token');",
-                  "  pm.expect(jsonData.token).to.be.a('string').and.not.empty;",
-                  "});",
-                  "if (jsonData && jsonData.token) {",
-                  "  pm.collectionVariables.set('TOKEN', jsonData.token);",
-                  "  pm.environment.set('TOKEN', jsonData.token);",
-                  "  console.log('TOKEN saved');",
-                  "} else {",
-                  "  console.warn('No token found. Check email/password or initiate admin first.');",
-                  "}"
-                ]
-              }
-            }
-          ],
+          "name": "Get Category by ID",
           "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
+          }
+        },
+        {
+          "name": "Create Category",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
             "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json",
-                "type": "text"
-              }
-            ],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"password123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Running", "type": "text" },
+                { "key": "description", "value": "Perlengkapan lari", "type": "text" },
+                { "key": "image", "type": "file", "src": [] }
+              ]
             },
-            "url": {
-              "raw": "{{BASE_URL}}/api/auth/signin",
-              "host": ["{{BASE_URL}}"],
-              "path": ["api", "auth", "signin"]
-            }
-          },
-          "response": []
+            "url": { "raw": "{{BASE_URL}}/api/categories", "host": ["{{BASE_URL}}"], "path": ["api", "categories"] }
+          }
+        },
+        {
+          "name": "Update Category",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "method": "PUT",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Running Gear", "type": "text" },
+                { "key": "image", "type": "file", "src": [] }
+              ]
+            },
+            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
+          }
+        },
+        {
+          "name": "Delete Category",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "method": "DELETE",
+            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{BASE_URL}}/api/products", "host": ["{{BASE_URL}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "Sepatu Nike Joyride", "type": "text" },
+                { "key": "description", "value": "Sepatu lari empuk", "type": "text" },
+                { "key": "price", "value": "1200000", "type": "text" },
+                { "key": "stock", "value": "50", "type": "text" },
+                { "key": "category", "value": "ISI_ID_CATEGORY_DI_SINI", "type": "text" },
+                { "key": "image", "type": "file", "src": [] }
+              ]
+            },
+            "url": { "raw": "{{BASE_URL}}/api/products", "host": ["{{BASE_URL}}"], "path": ["api", "products"] }
+          }
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "method": "PUT",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "price", "value": "1100000", "type": "text" },
+                { "key": "stock", "value": "45", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{BASE_URL}}/api/products/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "products", "ID_DI_SINI"] }
+          }
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "method": "DELETE",
+            "url": { "raw": "{{BASE_URL}}/api/products/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "products", "ID_DI_SINI"] }
+          }
         }
       ]
     }

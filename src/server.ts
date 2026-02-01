@@ -5,22 +5,34 @@ import app from "./app";
 const PORT = Number(process.env.PORT) || 5001;
 const MONGO_URI = process.env.MONGO_URI;
 
+// Cek dulu variabel env-nya, jangan sampai server jalan tanpa database
 if (!MONGO_URI) {
-  throw new Error("MONGO_URI is not defined");
+  console.error("Waduh, MONGO_URI belum ada di .env!");
+  process.exit(1);
 }
 
 const startServer = async () => {
   try {
+    // Koneksi ke MongoDB
     await mongoose.connect(MONGO_URI);
-    console.log("MongoDB connected");
+    console.log("Mantap! MongoDB sudah tersambung.");
 
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
+    // Nyalain server
+    const server = app.listen(PORT, () => {
+      console.log(`Gas! Server jalan di port ${PORT}`);
     });
+
+    // Jaga-jaga kalau ada error yang nggak ketangkep
+    process.on("unhandledRejection", (err: any) => {
+      console.error(`Ada error yang nggak ketangkep: ${err.message}`);
+      server.close(() => process.exit(1));
+    });
+
   } catch (error) {
-    console.error("Failed to start server", error);
+    console.error("Gagal start server nih:", error);
     process.exit(1);
   }
 };
 
+// Panggil fungsi buat jalanin server
 startServer();
