@@ -8,42 +8,65 @@ import {
 } from "../controllers/category.controller";
 import { upload } from "../middlewares/upload.middleware";
 import { authenticate } from "../middlewares/auth.middleware";
+import { validateCategory, validateParamId } from "../middlewares/validator.middleware";
 
 const router = Router();
 
 /**
- * PUBLIC ROUTES
- * Rute yang bisa diakses oleh siapa saja (misal: untuk tampilan pembeli)
+ * CATEGORY ROUTES
+ * Base Path: /api/categories
  */
-router.get("/", getCategories);
-router.get("/:id", getCategoryById);
+
+/* --- PUBLIC ROUTES --- */
 
 /**
- * PROTECTED ROUTES (Admin Only)
- * Rute yang memerlukan autentikasi dan penanganan file upload
+ * @route   GET /api/categories
+ * @desc    Get all categories
+ * @access  Public
  */
+router.get("/", getCategories);
 
-// Menambahkan kategori baru dengan upload gambar
+/**
+ * @route   GET /api/categories/:id
+ * @desc    Get single category by ID
+ * @access  Public
+ */
+router.get("/:id", validateParamId, getCategoryById);
+
+/* --- PROTECTED ROUTES (Admin Only) --- */
+
+/**
+ * @route   POST /api/categories
+ * @desc    Create new category with image upload
+ * @access  Private (Admin)
+ */
 router.post(
-  "/", 
-  authenticate, 
-  upload.single("image"), 
+  "/",
+  authenticate,
+  upload.single("image"),
+  validateCategory,
   createCategory
 );
 
-// Memperbarui data kategori (mendukung update gambar)
+/**
+ * @route   PUT /api/categories/:id
+ * @desc    Update category data and/or image
+ * @access  Private (Admin)
+ */
 router.put(
-  "/:id", 
-  authenticate, 
-  upload.single("image"), 
+  "/:id",
+  authenticate,
+  validateParamId,
+  upload.single("image"),
+  validateCategory,
   updateCategory
 );
 
-// Menghapus kategori
-router.delete(
-  "/:id", 
-  authenticate, 
-  deleteCategory
-);
+/**
+ * @route   DELETE /api/categories/:id
+ * @desc    Delete category
+ * @access  Private (Admin)
+ */
+router.delete("/:id", authenticate, validateParamId, deleteCategory);
 
 export default router;

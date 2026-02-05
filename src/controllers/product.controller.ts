@@ -1,195 +1,141 @@
 import { Request, Response } from "express";
 import Product from "../models/product.model";
+import Category from "../models/category.model";
+import { asyncHandler } from "../utils/asyncHandler";
+import { ResponseHandler } from "../utils/response";
+import { ApiError } from "../utils/ApiError";
 
 /**
- * @description Membuat Produk baru
+ * @description Create a new product
  * @route POST /api/products
+ * @access Private (Admin)
  */
-export const createProduct = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { name, description, price, stock, category } = req.body;
+export const createProduct = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { name, description, price, stock, category } = req.body;
 
-    // 1. Validasi Input Dasar
-    if (!name || !price || !category) {
-      res.status(400).json({ 
-        success: false, 
-        message: "Name, price, and category are required fields" 
-      });
-      return;
-    }
-
-    const productData = {
-      name,
-      description,
-      price,
-      stock,
-      category,
-      imageUrl: req.file ? req.file.path : undefined
-    };
-
-    // 2. Simpan ke Database
-    const product = new Product(productData);
-    await product.save();
-
-    res.status(201).json({
-      success: true,
-      message: "Product created successfully",
-      data: product
-    });
-  } catch (error) {
-    console.error("Create Product Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error creating product", 
-      error: error instanceof Error ? error.message : error 
-    });
+  // Validasi bahwa kategori yang diberikan ada
+  const categoryExists = await Category.findById(category);
+  if (!categoryExists) {
+    throw ApiError.badRequest("Invalid category. The specified category does not exist.");
   }
-};
+
+  const productData = {
+    name,
+    description,
+    price,
+    stock: stock || 0,
+    category,
+    imageUrl: req.file?.path,
+  };
+
+  const product = new Product(productData);
+  await product.save();
+
+  // Populate category untuk response
+  await product.populate("category", "name");
+
+  ResponseHandler.created(res, "Product created successfully", product);
+});
 
 /**
- * @description Mengambil semua daftar produk (dengan info kategori)
+ * @description Get all products
  * @route GET /api/products
+ * @query category - Filter by category ID
+ * @query search - Search by product name
+ * @query minPrice - Minimum price filter
+ * @query maxPrice - Maximum price filter
+ * @access Public
  */
-export const getProducts = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    // Mengambil semua produk dan melakukan join (populate) dengan model Category
-    const products = await Product.find()
-      .populate("category", "name") // Hanya mengambil field 'name' dari category
-      .sort({ createdAt: -1 });
+export const getProducts = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { category, search, minPrice, maxPrice } = req.query;
 
-    res.status(200).json({
-      success: true,
-      message: "Products fetched successfully",
-      count: products.length,
-      data: products
-    });
-  } catch (error) {
-    console.error("Get Products Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error fetching products", 
-      error 
-    });
+  // Build query object
+  const query: Record<string, unknown> = {};
+
+  if (category) {
+    query.category = category;
   }
-};
+
+  if (search) {
+    query.name = { $regex: search, $options: "i" };
+  }
+
+  if (minPrice || maxPrice) {
+    query.price = {};
+    if (minPrice) (query.price as Record<string, number>).$gte = Number(minPrice);
+    if (maxPrice) (query.price as Record<string, number>).$lte = Number(maxPrice);
+  }
+
+  const products = await Product.find(query)
+    .populate("category", "name")
+    .sort({ createdAt: -1 });
+
+  ResponseHandler.ok(res, "Products fetched successfully", products, products.length);
+});
 
 /**
- * @description Mengambil detail satu produk berdasarkan ID
+ * @description Get single product by ID
  * @route GET /api/products/:id
+ * @access Public
  */
-export const getProductById = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const product = await Product.findById(id).populate("category");
+export const getProductById = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const product = await Product.findById(id).populate("category");
 
-    if (!product) {
-      res.status(404).json({ 
-        success: false, 
-        message: `Product with ID ${id} not found` 
-      });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Product found",
-      data: product
-    });
-  } catch (error) {
-    console.error("Get Product By ID Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error fetching product", 
-      error 
-    });
+  if (!product) {
+    throw ApiError.notFound(`Product with ID '${id}' not found`);
   }
-};
+
+  ResponseHandler.ok(res, "Product found", product);
+});
 
 /**
- * @description Memperbarui data produk
+ * @description Update product
  * @route PUT /api/products/:id
+ * @access Private (Admin)
  */
-export const updateProduct = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const updateData = { ...req.body };
+export const updateProduct = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { category } = req.body;
+  const updateData = { ...req.body };
 
-    // Update imageUrl jika ada file baru yang diunggah
-    if (req.file) {
-      updateData.imageUrl = req.file.path;
+  // Jika kategori diubah, validasi bahwa kategori baru ada
+  if (category) {
+    const categoryExists = await Category.findById(category);
+    if (!categoryExists) {
+      throw ApiError.badRequest("Invalid category. The specified category does not exist.");
     }
-
-    const product = await Product.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true },
-    ).populate("category");
-
-    if (!product) {
-      res.status(404).json({ 
-        success: false, 
-        message: "Product not found, update failed" 
-      });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Product updated successfully",
-      data: product
-    });
-  } catch (error) {
-    console.error("Update Product Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error updating product", 
-      error 
-    });
   }
-};
+
+  // Update imageUrl jika ada file baru
+  if (req.file) {
+    updateData.imageUrl = req.file.path;
+  }
+
+  const product = await Product.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: true,
+  }).populate("category");
+
+  if (!product) {
+    throw ApiError.notFound("Product not found, update failed");
+  }
+
+  ResponseHandler.ok(res, "Product updated successfully", product);
+});
 
 /**
- * @description Menghapus produk
+ * @description Delete product
  * @route DELETE /api/products/:id
+ * @access Private (Admin)
  */
-export const deleteProduct = async (
-  req: Request,
-  res: Response,
-): Promise<void> => {
-  try {
-    const { id } = req.params;
-    const product = await Product.findByIdAndDelete(id);
+export const deleteProduct = asyncHandler(async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const product = await Product.findByIdAndDelete(id);
 
-    if (!product) {
-      res.status(404).json({ 
-        success: false, 
-        message: "Product not found, deletion failed" 
-      });
-      return;
-    }
-
-    res.status(200).json({ 
-      success: true,
-      message: "Product deleted successfully" 
-    });
-  } catch (error) {
-    console.error("Delete Product Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: "Error deleting product", 
-      error 
-    });
+  if (!product) {
+    throw ApiError.notFound("Product not found, deletion failed");
   }
-};
+
+  ResponseHandler.ok(res, "Product deleted successfully");
+});

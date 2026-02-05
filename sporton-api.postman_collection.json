@@ -1,47 +1,92 @@
 {
   "info": {
-    "name": "Sporton API - Ultimate Collection",
-    "description": "Full Documentation for Sporton Backend. Includes Auth, Category CRUD, and Product CRUD with File Upload support.",
+    "_postman_id": "sporton-api-collection-v2",
+    "name": "Sporton API - Complete Collection",
+    "description": "## Sporton Backend API Documentation\n\nComplete API documentation for Sporton e-commerce backend.\n\n### Authentication\nThis API uses JWT Bearer Token authentication. After successful login, copy the token and set it in the `TOKEN` collection variable.\n\n### Base URL\n- Development: `http://localhost:5001`\n\n### Response Format\nAll responses follow a consistent format:\n```json\n{\n  \"success\": true/false,\n  \"message\": \"Description\",\n  \"data\": {},\n  \"count\": 0 // for list endpoints\n}\n```",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "BASE_URL", "value": "http://localhost:5001", "type": "string" },
-    { "key": "TOKEN", "value": "", "type": "string" }
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:5001",
+      "type": "string"
+    },
+    {
+      "key": "TOKEN",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "CATEGORY_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "PRODUCT_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "TRANSACTION_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "BANK_ID",
+      "value": "",
+      "type": "string"
+    }
   ],
   "item": [
     {
-      "name": "01. Auth & System",
+      "name": "01. System & Health",
       "item": [
         {
           "name": "Health Check",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{BASE_URL}}/", "host": ["{{BASE_URL}}"], "path": [""] }
-          }
-        },
-        {
-          "name": "Initiate Admin",
-          "request": {
-            "method": "POST",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Admin Sporton\",\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"Sporton123\"\n}",
-              "options": { "raw": { "language": "json" } }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/",
+              "host": ["{{BASE_URL}}"],
+              "path": [""]
             },
-            "url": { "raw": "{{BASE_URL}}/api/auth/initiate-admin-user", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "initiate-admin-user"] }
-          }
+            "description": "Check if the API server is running."
+          },
+          "response": []
         },
         {
-          "name": "Login Admin",
+          "name": "API Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api"]
+            },
+            "description": "Get API information and available endpoints."
+          },
+          "response": []
+        }
+      ],
+      "description": "System health check and API information endpoints."
+    },
+    {
+      "name": "02. Authentication",
+      "item": [
+        {
+          "name": "Initiate Admin User",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
                   "const jsonData = pm.response.json();",
-                  "if (jsonData.success && jsonData.token) {",
-                  "  pm.collectionVariables.set('TOKEN', jsonData.token);",
-                  "  console.log('Token saved to variable!');",
+                  "if (jsonData.success) {",
+                  "    pm.test('Admin created successfully', function() {",
+                  "        pm.expect(jsonData.message).to.include('successfully');",
+                  "    });",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -50,127 +95,849 @@
           ],
           "request": {
             "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"admin@sporton.com\",\n  \"password\": \"Sporton123\"\n}",
-              "options": { "raw": { "language": "json" } }
+              "raw": "{\n    \"name\": \"Admin Sporton\",\n    \"email\": \"admin@sporton.com\",\n    \"password\": \"Sporton123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
-            "url": { "raw": "{{BASE_URL}}/api/auth/signin", "host": ["{{BASE_URL}}"], "path": ["api", "auth", "signin"] }
-          }
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/initiate-admin-user",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "initiate-admin-user"]
+            },
+            "description": "Create the first admin user. This endpoint only works when there are no users in the database."
+          },
+          "response": []
+        },
+        {
+          "name": "Login (Sign In)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data.token) {",
+                  "    pm.collectionVariables.set('TOKEN', jsonData.data.token);",
+                  "    console.log('✅ Token saved to collection variable!');",
+                  "    pm.test('Login successful', function() {",
+                  "        pm.expect(jsonData.success).to.be.true;",
+                  "        pm.expect(jsonData.data.token).to.be.a('string');",
+                  "    });",
+                  "} else {",
+                  "    console.log('❌ Login failed or token not found');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"admin@sporton.com\",\n    \"password\": \"Sporton123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/signin",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "signin"]
+            },
+            "description": "Authenticate user and receive JWT token. Token is automatically saved to collection variable."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/auth/me",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "auth", "me"]
+            },
+            "description": "Get the currently logged-in user's profile. Requires authentication."
+          },
+          "response": []
         }
-      ]
+      ],
+      "description": "Authentication endpoints for login and user management."
     },
     {
-      "name": "02. Categories",
+      "name": "03. Categories",
       "item": [
         {
           "name": "Get All Categories",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{BASE_URL}}/api/categories", "host": ["{{BASE_URL}}"], "path": ["api", "categories"] }
-          }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/categories",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "categories"]
+            },
+            "description": "Get all categories. Public endpoint."
+          },
+          "response": []
         },
         {
           "name": "Get Category by ID",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
-          }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/categories/{{CATEGORY_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "categories", "{{CATEGORY_ID}}"]
+            },
+            "description": "Get a single category by its ID. Public endpoint."
+          },
+          "response": []
         },
         {
           "name": "Create Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data._id) {",
+                  "    pm.collectionVariables.set('CATEGORY_ID', jsonData.data._id);",
+                  "    console.log('✅ Category ID saved:', jsonData.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
+            "header": [],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "name", "value": "Running", "type": "text" },
-                { "key": "description", "value": "Perlengkapan lari", "type": "text" },
-                { "key": "image", "type": "file", "src": [] }
+                {
+                  "key": "name",
+                  "value": "Running Shoes",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "High-quality running shoes for athletes",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
               ]
             },
-            "url": { "raw": "{{BASE_URL}}/api/categories", "host": ["{{BASE_URL}}"], "path": ["api", "categories"] }
-          }
+            "url": {
+              "raw": "{{BASE_URL}}/api/categories",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "categories"]
+            },
+            "description": "Create a new category with image upload. Requires authentication."
+          },
+          "response": []
         },
         {
           "name": "Update Category",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "PUT",
+            "header": [],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "name", "value": "Running Gear", "type": "text" },
-                { "key": "image", "type": "file", "src": [] }
+                {
+                  "key": "name",
+                  "value": "Running Gear",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Premium running gear and accessories",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
               ]
             },
-            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
-          }
+            "url": {
+              "raw": "{{BASE_URL}}/api/categories/{{CATEGORY_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "categories", "{{CATEGORY_ID}}"]
+            },
+            "description": "Update an existing category. Image is optional. Requires authentication."
+          },
+          "response": []
         },
         {
           "name": "Delete Category",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "DELETE",
-            "url": { "raw": "{{BASE_URL}}/api/categories/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "categories", "ID_DI_SINI"] }
-          }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/categories/{{CATEGORY_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "categories", "{{CATEGORY_ID}}"]
+            },
+            "description": "Delete a category. Will fail if products are using this category. Requires authentication."
+          },
+          "response": []
         }
-      ]
+      ],
+      "description": "Category management endpoints."
     },
     {
-      "name": "03. Products",
+      "name": "04. Products",
       "item": [
         {
           "name": "Get All Products",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{BASE_URL}}/api/products", "host": ["{{BASE_URL}}"], "path": ["api", "products"] }
-          }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/products",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Get all products. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Products with Filters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/products?category={{CATEGORY_ID}}&search=nike&minPrice=100000&maxPrice=5000000",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "{{CATEGORY_ID}}",
+                  "description": "Filter by category ID"
+                },
+                {
+                  "key": "search",
+                  "value": "nike",
+                  "description": "Search by product name"
+                },
+                {
+                  "key": "minPrice",
+                  "value": "100000",
+                  "description": "Minimum price filter"
+                },
+                {
+                  "key": "maxPrice",
+                  "value": "5000000",
+                  "description": "Maximum price filter"
+                }
+              ]
+            },
+            "description": "Get products with optional filters. All query parameters are optional."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/products/{{PRODUCT_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products", "{{PRODUCT_ID}}"]
+            },
+            "description": "Get a single product by its ID. Public endpoint."
+          },
+          "response": []
         },
         {
           "name": "Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data._id) {",
+                  "    pm.collectionVariables.set('PRODUCT_ID', jsonData.data._id);",
+                  "    console.log('✅ Product ID saved:', jsonData.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "POST",
+            "header": [],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "name", "value": "Sepatu Nike Joyride", "type": "text" },
-                { "key": "description", "value": "Sepatu lari empuk", "type": "text" },
-                { "key": "price", "value": "1200000", "type": "text" },
-                { "key": "stock", "value": "50", "type": "text" },
-                { "key": "category", "value": "ISI_ID_CATEGORY_DI_SINI", "type": "text" },
-                { "key": "image", "type": "file", "src": [] }
+                {
+                  "key": "name",
+                  "value": "Nike Air Zoom Pegasus 40",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Sepatu lari Nike dengan teknologi Zoom Air untuk kenyamanan maksimal",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "1899000",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "50",
+                  "type": "text"
+                },
+                {
+                  "key": "category",
+                  "value": "{{CATEGORY_ID}}",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
               ]
             },
-            "url": { "raw": "{{BASE_URL}}/api/products", "host": ["{{BASE_URL}}"], "path": ["api", "products"] }
-          }
+            "url": {
+              "raw": "{{BASE_URL}}/api/products",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Create a new product with image upload. Requires authentication."
+          },
+          "response": []
         },
         {
           "name": "Update Product",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "PUT",
+            "header": [],
             "body": {
               "mode": "formdata",
               "formdata": [
-                { "key": "price", "value": "1100000", "type": "text" },
-                { "key": "stock", "value": "45", "type": "text" }
+                {
+                  "key": "name",
+                  "value": "Nike Air Zoom Pegasus 40 - Updated",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "1799000",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "45",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": []
+                }
               ]
             },
-            "url": { "raw": "{{BASE_URL}}/api/products/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "products", "ID_DI_SINI"] }
-          }
+            "url": {
+              "raw": "{{BASE_URL}}/api/products/{{PRODUCT_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products", "{{PRODUCT_ID}}"]
+            },
+            "description": "Update an existing product. All fields are optional. Requires authentication."
+          },
+          "response": []
         },
         {
           "name": "Delete Product",
           "request": {
-            "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{TOKEN}}", "type": "string" }] },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
             "method": "DELETE",
-            "url": { "raw": "{{BASE_URL}}/api/products/ID_DI_SINI", "host": ["{{BASE_URL}}"], "path": ["api", "products", "ID_DI_SINI"] }
-          }
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/products/{{PRODUCT_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "products", "{{PRODUCT_ID}}"]
+            },
+            "description": "Delete a product. Requires authentication."
+          },
+          "response": []
         }
-      ]
+      ],
+      "description": "Product management endpoints."
+    },
+    {
+      "name": "05. Banks",
+      "item": [
+        {
+          "name": "Get All Banks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/banks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "banks"]
+            },
+            "description": "Get all bank accounts for payment. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Bank by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/banks/{{BANK_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "banks", "{{BANK_ID}}"]
+            },
+            "description": "Get a single bank account by its ID. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Bank",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data._id) {",
+                  "    pm.collectionVariables.set('BANK_ID', jsonData.data._id);",
+                  "    console.log('✅ Bank ID saved:', jsonData.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"bankName\": \"Bank Central Asia (BCA)\",\n    \"accountName\": \"PT Sporton Indonesia\",\n    \"accountNumber\": \"1234567890\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/banks",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "banks"]
+            },
+            "description": "Create a new bank account. Requires authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Bank",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"bankName\": \"Bank BCA\",\n    \"accountName\": \"PT Sporton Indonesia\",\n    \"accountNumber\": \"0987654321\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/banks/{{BANK_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "banks", "{{BANK_ID}}"]
+            },
+            "description": "Update an existing bank account. Requires authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Bank",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/banks/{{BANK_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "banks", "{{BANK_ID}}"]
+            },
+            "description": "Delete a bank account. Requires authentication."
+          },
+          "response": []
+        }
+      ],
+      "description": "Bank account management for payment information."
+    },
+    {
+      "name": "06. Transactions",
+      "item": [
+        {
+          "name": "Create Transaction (Checkout)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data && jsonData.data._id) {",
+                  "    pm.collectionVariables.set('TRANSACTION_ID', jsonData.data._id);",
+                  "    console.log('✅ Transaction ID saved:', jsonData.data._id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "purchasedItems",
+                  "value": "[{\"productId\": \"{{PRODUCT_ID}}\", \"qty\": 2}]",
+                  "type": "text",
+                  "description": "JSON array of purchased items"
+                },
+                {
+                  "key": "totalPayment",
+                  "value": "3798000",
+                  "type": "text"
+                },
+                {
+                  "key": "customerName",
+                  "value": "John Doe",
+                  "type": "text"
+                },
+                {
+                  "key": "customerContact",
+                  "value": "081234567890",
+                  "type": "text"
+                },
+                {
+                  "key": "customerAddress",
+                  "value": "Jl. Sudirman No. 123, Jakarta Pusat, DKI Jakarta 10110",
+                  "type": "text"
+                },
+                {
+                  "key": "image",
+                  "type": "file",
+                  "src": [],
+                  "description": "Payment proof image"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions/checkout",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions", "checkout"]
+            },
+            "description": "Create a new transaction (checkout). Requires payment proof image. Public endpoint."
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Transactions",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions"]
+            },
+            "description": "Get all transactions. Requires authentication (Admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Transactions by Status",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions?status=pending",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "pending",
+                  "description": "Filter by status: pending, paid, rejected"
+                }
+              ]
+            },
+            "description": "Get transactions filtered by status. Requires authentication (Admin)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Transaction by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions/{{TRANSACTION_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions", "{{TRANSACTION_ID}}"]
+            },
+            "description": "Get a single transaction by its ID. Public endpoint (for customer order tracking)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Transaction Status - Paid",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"paid\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions/{{TRANSACTION_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions", "{{TRANSACTION_ID}}"]
+            },
+            "description": "Update transaction status to 'paid'. This will automatically reduce product stock. Requires authentication."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Transaction Status - Rejected",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{TOKEN}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"status\": \"rejected\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/api/transactions/{{TRANSACTION_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["api", "transactions", "{{TRANSACTION_ID}}"]
+            },
+            "description": "Update transaction status to 'rejected'. Requires authentication."
+          },
+          "response": []
+        }
+      ],
+      "description": "Transaction/Order management endpoints."
     }
   ]
 }

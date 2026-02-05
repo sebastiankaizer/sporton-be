@@ -1,6 +1,8 @@
-import multer from "multer";
+import multer, { FileFilterCallback } from "multer";
 import path from "path";
 import fs from "fs";
+import { Request } from "express";
+import { config } from "../config";
 
 /**
  * 1. Persiapan Folder Penyimpanan
@@ -8,6 +10,7 @@ import fs from "fs";
  */
 const uploadDir = path.join(process.cwd(), "uploads");
 
+// Buat folder uploads jika belum ada
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
@@ -16,37 +19,68 @@ if (!fs.existsSync(uploadDir)) {
  * 2. Konfigurasi Penyimpanan (Disk Storage)
  */
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (_req: Request, _file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, uploadDir);
   },
-  filename: (req, file, cb) => {
+  filename: (_req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
+    // Generate unique filename: timestamp-randomNumber.extension
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `${uniqueSuffix}${ext}`);
   },
 });
 
 /**
  * 3. Filter Jenis File
+ * Hanya menerima file gambar dengan mimetype yang diizinkan
  */
 const fileFilter = (
-  req: any,
+  _req: Request,
   file: Express.Multer.File,
-  cb: multer.FileFilterCallback,
-) => {
-  if (file.mimetype.startsWith("image/")) {
+  cb: FileFilterCallback
+): void => {
+  // Cek mimetype
+  if (config.allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only images (.jpg, .jpeg, .png, .webp) are allowed!") as any);
+    cb(new Error(`Invalid file type. Allowed types: ${config.allowedMimeTypes.join(", ")}`));
   }
 };
 
 /**
- * 4. Inisialisasi Multer
+ * 4. Inisialisasi Multer dengan konfigurasi lengkap
  */
 export const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { 
-    fileSize: 5 * 1024 * 1024 // 5MB
+  storage,
+  fileFilter,
+  limits: {
+    fileSize: config.maxFileSize, // 5MB dari config
+    files: 1, // Maksimal 1 file per request
   },
 });
+
+/**
+ * Helper function untuk menghapus file yang sudah diupload
+ * Berguna ketika operasi database gagal setelah file berhasil diupload
+ */
+export const deleteUploadedFile = (filePath: string): void => {
+  if (filePath && fs.existsSync(filePath)) {
+    fs.unlink(filePath, (err) => {
+      if (err) {
+        console.error(`Failed to delete file: ${filePath}`, err);
+      }
+    });
+  }
+};
+
+/**
+ * Helper function untuk mendapatkan URL publik dari file path
+ */
+export const getFileUrl = (filePath: string, baseUrl: string): string => {
+  if (!filePath) return "";
+  // Convert backslashes to forward slashes untuk URL
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  // Extract filename from path
+  const filename = path.basename(normalizedPath);
+  return `${baseUrl}/uploads/${filename}`;
+};

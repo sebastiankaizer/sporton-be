@@ -8,46 +8,65 @@ import {
 } from "../controllers/product.controller";
 import { upload } from "../middlewares/upload.middleware";
 import { authenticate } from "../middlewares/auth.middleware";
+import { validateProduct, validateParamId } from "../middlewares/validator.middleware";
 
 const router = Router();
 
 /**
- * @description Product Routes
+ * PRODUCT ROUTES
  * Base Path: /api/products
  */
 
 /* --- PUBLIC ROUTES --- */
 
-// Mendapatkan semua produk (biasanya untuk tampilan katalog)
+/**
+ * @route   GET /api/products
+ * @desc    Get all products (with optional filters: category, search, minPrice, maxPrice)
+ * @access  Public
+ */
 router.get("/", getProducts);
 
-// Mendapatkan detail produk berdasarkan ID
-router.get("/:id", getProductById);
+/**
+ * @route   GET /api/products/:id
+ * @desc    Get single product by ID
+ * @access  Public
+ */
+router.get("/:id", validateParamId, getProductById);
 
+/* --- PROTECTED ROUTES (Admin Only) --- */
 
-/* --- PROTECTED ROUTES (Admin Privileges) --- */
-
-// Menambahkan produk baru dengan upload gambar
+/**
+ * @route   POST /api/products
+ * @desc    Create new product with image upload
+ * @access  Private (Admin)
+ */
 router.post(
-  "/", 
-  authenticate, 
-  upload.single("image"), 
+  "/",
+  authenticate,
+  upload.single("image"),
+  validateProduct,
   createProduct
 );
 
-// Memperbarui data produk dan/atau mengganti gambar produk
+/**
+ * @route   PUT /api/products/:id
+ * @desc    Update product data and/or image
+ * @access  Private (Admin)
+ */
 router.put(
-  "/:id", 
-  authenticate, 
-  upload.single("image"), 
+  "/:id",
+  authenticate,
+  validateParamId,
+  upload.single("image"),
+  validateProduct,
   updateProduct
 );
 
-// Menghapus produk dari database
-router.delete(
-  "/:id", 
-  authenticate, 
-  deleteProduct
-);
+/**
+ * @route   DELETE /api/products/:id
+ * @desc    Delete product
+ * @access  Private (Admin)
+ */
+router.delete("/:id", authenticate, validateParamId, deleteProduct);
 
 export default router;

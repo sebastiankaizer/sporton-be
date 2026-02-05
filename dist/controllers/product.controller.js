@@ -14,169 +14,120 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteProduct = exports.updateProduct = exports.getProductById = exports.getProducts = exports.createProduct = void 0;
 const product_model_1 = __importDefault(require("../models/product.model"));
+const category_model_1 = __importDefault(require("../models/category.model"));
+const asyncHandler_1 = require("../utils/asyncHandler");
+const response_1 = require("../utils/response");
+const ApiError_1 = require("../utils/ApiError");
 /**
- * @description Membuat Produk baru
+ * @description Create a new product
  * @route POST /api/products
+ * @access Private (Admin)
  */
-const createProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { name, description, price, stock, category } = req.body;
-        // 1. Validasi Input Dasar
-        if (!name || !price || !category) {
-            res.status(400).json({
-                success: false,
-                message: "Name, price, and category are required fields"
-            });
-            return;
-        }
-        const productData = {
-            name,
-            description,
-            price,
-            stock,
-            category,
-            imageUrl: req.file ? req.file.path : undefined
-        };
-        // 2. Simpan ke Database
-        const product = new product_model_1.default(productData);
-        yield product.save();
-        res.status(201).json({
-            success: true,
-            message: "Product created successfully",
-            data: product
-        });
+exports.createProduct = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const { name, description, price, stock, category } = req.body;
+    // Validasi bahwa kategori yang diberikan ada
+    const categoryExists = yield category_model_1.default.findById(category);
+    if (!categoryExists) {
+        throw ApiError_1.ApiError.badRequest("Invalid category. The specified category does not exist.");
     }
-    catch (error) {
-        console.error("Create Product Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error creating product",
-            error: error instanceof Error ? error.message : error
-        });
-    }
-});
-exports.createProduct = createProduct;
+    const productData = {
+        name,
+        description,
+        price,
+        stock: stock || 0,
+        category,
+        imageUrl: (_a = req.file) === null || _a === void 0 ? void 0 : _a.path,
+    };
+    const product = new product_model_1.default(productData);
+    yield product.save();
+    // Populate category untuk response
+    yield product.populate("category", "name");
+    response_1.ResponseHandler.created(res, "Product created successfully", product);
+}));
 /**
- * @description Mengambil semua daftar produk (dengan info kategori)
+ * @description Get all products
  * @route GET /api/products
+ * @query category - Filter by category ID
+ * @query search - Search by product name
+ * @query minPrice - Minimum price filter
+ * @query maxPrice - Maximum price filter
+ * @access Public
  */
-const getProducts = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        // Mengambil semua produk dan melakukan join (populate) dengan model Category
-        const products = yield product_model_1.default.find()
-            .populate("category", "name") // Hanya mengambil field 'name' dari category
-            .sort({ createdAt: -1 });
-        res.status(200).json({
-            success: true,
-            message: "Products fetched successfully",
-            count: products.length,
-            data: products
-        });
+exports.getProducts = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { category, search, minPrice, maxPrice } = req.query;
+    // Build query object
+    const query = {};
+    if (category) {
+        query.category = category;
     }
-    catch (error) {
-        console.error("Get Products Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching products",
-            error
-        });
+    if (search) {
+        query.name = { $regex: search, $options: "i" };
     }
-});
-exports.getProducts = getProducts;
+    if (minPrice || maxPrice) {
+        query.price = {};
+        if (minPrice)
+            query.price.$gte = Number(minPrice);
+        if (maxPrice)
+            query.price.$lte = Number(maxPrice);
+    }
+    const products = yield product_model_1.default.find(query)
+        .populate("category", "name")
+        .sort({ createdAt: -1 });
+    response_1.ResponseHandler.ok(res, "Products fetched successfully", products, products.length);
+}));
 /**
- * @description Mengambil detail satu produk berdasarkan ID
+ * @description Get single product by ID
  * @route GET /api/products/:id
+ * @access Public
  */
-const getProductById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const product = yield product_model_1.default.findById(id).populate("category");
-        if (!product) {
-            res.status(404).json({
-                success: false,
-                message: `Product with ID ${id} not found`
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Product found",
-            data: product
-        });
+exports.getProductById = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    const product = yield product_model_1.default.findById(id).populate("category");
+    if (!product) {
+        throw ApiError_1.ApiError.notFound(`Product with ID '${id}' not found`);
     }
-    catch (error) {
-        console.error("Get Product By ID Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching product",
-            error
-        });
-    }
-});
-exports.getProductById = getProductById;
+    response_1.ResponseHandler.ok(res, "Product found", product);
+}));
 /**
- * @description Memperbarui data produk
+ * @description Update product
  * @route PUT /api/products/:id
+ * @access Private (Admin)
  */
-const updateProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const updateData = Object.assign({}, req.body);
-        // Update imageUrl jika ada file baru yang diunggah
-        if (req.file) {
-            updateData.imageUrl = req.file.path;
+exports.updateProduct = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    const { category } = req.body;
+    const updateData = Object.assign({}, req.body);
+    // Jika kategori diubah, validasi bahwa kategori baru ada
+    if (category) {
+        const categoryExists = yield category_model_1.default.findById(category);
+        if (!categoryExists) {
+            throw ApiError_1.ApiError.badRequest("Invalid category. The specified category does not exist.");
         }
-        const product = yield product_model_1.default.findByIdAndUpdate(id, updateData, { new: true, runValidators: true }).populate("category");
-        if (!product) {
-            res.status(404).json({
-                success: false,
-                message: "Product not found, update failed"
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Product updated successfully",
-            data: product
-        });
     }
-    catch (error) {
-        console.error("Update Product Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating product",
-            error
-        });
+    // Update imageUrl jika ada file baru
+    if (req.file) {
+        updateData.imageUrl = req.file.path;
     }
-});
-exports.updateProduct = updateProduct;
+    const product = yield product_model_1.default.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true,
+    }).populate("category");
+    if (!product) {
+        throw ApiError_1.ApiError.notFound("Product not found, update failed");
+    }
+    response_1.ResponseHandler.ok(res, "Product updated successfully", product);
+}));
 /**
- * @description Menghapus produk
+ * @description Delete product
  * @route DELETE /api/products/:id
+ * @access Private (Admin)
  */
-const deleteProduct = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const product = yield product_model_1.default.findByIdAndDelete(id);
-        if (!product) {
-            res.status(404).json({
-                success: false,
-                message: "Product not found, deletion failed"
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Product deleted successfully"
-        });
+exports.deleteProduct = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    const product = yield product_model_1.default.findByIdAndDelete(id);
+    if (!product) {
+        throw ApiError_1.ApiError.notFound("Product not found, deletion failed");
     }
-    catch (error) {
-        console.error("Delete Product Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error deleting product",
-            error
-        });
-    }
-});
-exports.deleteProduct = deleteProduct;
+    response_1.ResponseHandler.ok(res, "Product deleted successfully");
+}));

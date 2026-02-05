@@ -14,164 +14,101 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deleteCategory = exports.updateCategory = exports.getCategoryById = exports.getCategories = exports.createCategory = void 0;
 const category_model_1 = __importDefault(require("../models/category.model"));
+const product_model_1 = __importDefault(require("../models/product.model"));
+const asyncHandler_1 = require("../utils/asyncHandler");
+const response_1 = require("../utils/response");
+const ApiError_1 = require("../utils/ApiError");
 /**
- * @description Membuat Kategori baru
+ * @description Create a new category
  * @route POST /api/categories
+ * @access Private (Admin)
  */
-const createCategory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { name, description } = req.body;
-        // 1. Validasi Input Dasar
-        if (!name) {
-            res.status(400).json({
-                success: false,
-                message: "Category name is required"
-            });
-            return;
-        }
-        const categoryData = {
-            name,
-            description,
-            imageUrl: req.file ? req.file.path : undefined // Menangani upload file jika ada
-        };
-        // 2. Simpan ke Database
-        const category = new category_model_1.default(categoryData);
-        yield category.save();
-        res.status(201).json({
-            success: true,
-            message: "Category created successfully",
-            data: category
-        });
+exports.createCategory = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    const { name, description } = req.body;
+    // Cek duplikasi nama kategori
+    const existingCategory = yield category_model_1.default.findOne({ name: { $regex: new RegExp(`^${name}$`, "i") } });
+    if (existingCategory) {
+        throw ApiError_1.ApiError.conflict(`Category with name '${name}' already exists`);
     }
-    catch (error) {
-        console.error("Create Category Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error creating Category",
-            error: error instanceof Error ? error.message : error
-        });
-    }
-});
-exports.createCategory = createCategory;
+    const categoryData = {
+        name,
+        description,
+        imageUrl: (_a = req.file) === null || _a === void 0 ? void 0 : _a.path,
+    };
+    const category = new category_model_1.default(categoryData);
+    yield category.save();
+    response_1.ResponseHandler.created(res, "Category created successfully", category);
+}));
 /**
- * @description Mengambil semua daftar kategori
+ * @description Get all categories
  * @route GET /api/categories
+ * @access Public
  */
-const getCategories = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        // Mengambil semua kategori, diurutkan dari yang terbaru
-        const categories = yield category_model_1.default.find().sort({ createdAt: -1 });
-        res.status(200).json({
-            success: true,
-            message: "Categories fetched successfully",
-            count: categories.length,
-            data: categories
-        });
-    }
-    catch (error) {
-        console.error("Get Categories Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching categories",
-            error
-        });
-    }
-});
-exports.getCategories = getCategories;
+exports.getCategories = (0, asyncHandler_1.asyncHandler)((_req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const categories = yield category_model_1.default.find().sort({ createdAt: -1 });
+    response_1.ResponseHandler.ok(res, "Categories fetched successfully", categories, categories.length);
+}));
 /**
- * @description Mengambil satu kategori berdasarkan ID
+ * @description Get single category by ID
  * @route GET /api/categories/:id
+ * @access Public
  */
-const getCategoryById = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const category = yield category_model_1.default.findById(id);
-        if (!category) {
-            res.status(404).json({
-                success: false,
-                message: `Category with ID ${id} not found`
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Category found",
-            data: category
-        });
+exports.getCategoryById = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    const category = yield category_model_1.default.findById(id);
+    if (!category) {
+        throw ApiError_1.ApiError.notFound(`Category with ID '${id}' not found`);
     }
-    catch (error) {
-        console.error("Get Category By ID Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error fetching category",
-            error
-        });
-    }
-});
-exports.getCategoryById = getCategoryById;
+    response_1.ResponseHandler.ok(res, "Category found", category);
+}));
 /**
- * @description Memperbarui data kategori
+ * @description Update category
  * @route PUT /api/categories/:id
+ * @access Private (Admin)
  */
-const updateCategory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const updateData = Object.assign({}, req.body);
-        // Jika ada file gambar baru yang diupload
-        if (req.file) {
-            updateData.imageUrl = req.file.path;
-        }
-        const category = yield category_model_1.default.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
-        if (!category) {
-            res.status(404).json({
-                success: false,
-                message: "Category not found, update failed"
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Category updated successfully",
-            data: category
+exports.updateCategory = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    const { name } = req.body;
+    const updateData = Object.assign({}, req.body);
+    // Cek duplikasi nama jika nama diubah
+    if (name) {
+        const existingCategory = yield category_model_1.default.findOne({
+            _id: { $ne: id },
+            name: { $regex: new RegExp(`^${name}$`, "i") },
         });
+        if (existingCategory) {
+            throw ApiError_1.ApiError.conflict(`Category with name '${name}' already exists`);
+        }
     }
-    catch (error) {
-        console.error("Update Category Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error updating category",
-            error
-        });
+    // Update imageUrl jika ada file baru
+    if (req.file) {
+        updateData.imageUrl = req.file.path;
     }
-});
-exports.updateCategory = updateCategory;
+    const category = yield category_model_1.default.findByIdAndUpdate(id, updateData, {
+        new: true,
+        runValidators: true,
+    });
+    if (!category) {
+        throw ApiError_1.ApiError.notFound("Category not found, update failed");
+    }
+    response_1.ResponseHandler.ok(res, "Category updated successfully", category);
+}));
 /**
- * @description Menghapus kategori
+ * @description Delete category
  * @route DELETE /api/categories/:id
+ * @access Private (Admin)
  */
-const deleteCategory = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    try {
-        const { id } = req.params;
-        const category = yield category_model_1.default.findByIdAndDelete(id);
-        if (!category) {
-            res.status(404).json({
-                success: false,
-                message: "Category not found, deletion failed"
-            });
-            return;
-        }
-        res.status(200).json({
-            success: true,
-            message: "Category deleted successfully"
-        });
+exports.deleteCategory = (0, asyncHandler_1.asyncHandler)((req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    const { id } = req.params;
+    // Cek apakah ada produk yang menggunakan kategori ini
+    const productCount = yield product_model_1.default.countDocuments({ category: id });
+    if (productCount > 0) {
+        throw ApiError_1.ApiError.conflict(`Cannot delete category. ${productCount} product(s) are using this category. Please reassign or delete those products first.`);
     }
-    catch (error) {
-        console.error("Delete Category Error:", error);
-        res.status(500).json({
-            success: false,
-            message: "Error deleting category",
-            error
-        });
+    const category = yield category_model_1.default.findByIdAndDelete(id);
+    if (!category) {
+        throw ApiError_1.ApiError.notFound("Category not found, deletion failed");
     }
-});
-exports.deleteCategory = deleteCategory;
+    response_1.ResponseHandler.ok(res, "Category deleted successfully");
+}));

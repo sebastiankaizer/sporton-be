@@ -12,35 +12,72 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-require("dotenv/config");
 const mongoose_1 = __importDefault(require("mongoose"));
 const app_1 = __importDefault(require("./app"));
-const PORT = Number(process.env.PORT) || 5001;
-const MONGO_URI = process.env.MONGO_URI;
-// Cek dulu variabel env-nya, jangan sampai server jalan tanpa database
-if (!MONGO_URI) {
-    console.error("Waduh, MONGO_URI belum ada di .env!");
-    process.exit(1);
-}
+const config_1 = require("./config");
+/**
+ * Server Startup
+ */
 const startServer = () => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        // Koneksi ke MongoDB
-        yield mongoose_1.default.connect(MONGO_URI);
-        console.log("Mantap! MongoDB sudah tersambung.");
-        // Nyalain server
-        const server = app_1.default.listen(PORT, () => {
-            console.log(`Gas! Server jalan di port ${PORT}`);
+        // Validate environment variables
+        (0, config_1.validateEnv)();
+        // Connect to MongoDB
+        console.log("🔄 Connecting to MongoDB...");
+        yield mongoose_1.default.connect(config_1.config.mongoUri, {
+            family: 4, // Use IPv4
+            authSource: "admin",
+            retryWrites: true,
         });
-        // Jaga-jaga kalau ada error yang nggak ketangkep
-        process.on("unhandledRejection", (err) => {
-            console.error(`Ada error yang nggak ketangkep: ${err.message}`);
-            server.close(() => process.exit(1));
+        console.log("✅ Connected to MongoDB successfully");
+        // Start Express server
+        const server = app_1.default.listen(config_1.config.port, () => {
+            console.log(`🚀 Server is running on port ${config_1.config.port}`);
+            console.log(`📍 Environment: ${config_1.config.nodeEnv}`);
+            console.log(`🌐 API URL: http://localhost:${config_1.config.port}`);
+        });
+        // Graceful shutdown handlers
+        const gracefulShutdown = (signal) => __awaiter(void 0, void 0, void 0, function* () {
+            console.log(`\n${signal} received. Starting graceful shutdown...`);
+            server.close(() => __awaiter(void 0, void 0, void 0, function* () {
+                console.log("🔒 HTTP server closed");
+                try {
+                    yield mongoose_1.default.connection.close();
+                    console.log("🔒 MongoDB connection closed");
+                    process.exit(0);
+                }
+                catch (error) {
+                    console.error("Error during shutdown:", error);
+                    process.exit(1);
+                }
+            }));
+            // Force close after 10 seconds
+            setTimeout(() => {
+                console.error("⚠️ Could not close connections in time, forcefully shutting down");
+                process.exit(1);
+            }, 10000);
+        });
+        // Listen for termination signals
+        process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+        process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+        // Handle unhandled promise rejections
+        process.on("unhandledRejection", (reason) => {
+            console.error("❌ Unhandled Rejection:", reason);
+            // Don't exit in development for debugging
+            if (config_1.config.nodeEnv === "production") {
+                gracefulShutdown("unhandledRejection");
+            }
+        });
+        // Handle uncaught exceptions
+        process.on("uncaughtException", (error) => {
+            console.error("❌ Uncaught Exception:", error);
+            gracefulShutdown("uncaughtException");
         });
     }
     catch (error) {
-        console.error("Gagal start server nih:", error);
+        console.error("❌ Failed to start server:", error);
         process.exit(1);
     }
 });
-// Panggil fungsi buat jalanin server
+// Start the server
 startServer();

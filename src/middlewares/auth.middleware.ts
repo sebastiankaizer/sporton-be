@@ -1,14 +1,24 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { config } from "../config";
+import { ApiError } from "../utils/ApiError";
 
-const JWT_SECRET = process.env.JWT_SECRET || "Sporton123";
+/**
+ * Interface untuk JWT Payload
+ */
+export interface JwtPayload {
+  id: string;
+  email: string;
+  iat: number;
+  exp: number;
+}
 
 /**
  * Interface untuk memperluas Express Request
  * Agar kita bisa menyimpan data user hasil decode JWT ke dalam objek req
  */
 export interface AuthRequest extends Request {
-  user?: any; // Anda bisa mengganti 'any' dengan interface User jika sudah ada
+  user?: JwtPayload;
 }
 
 /**
@@ -19,24 +29,28 @@ export const authenticate = (
   res: Response,
   next: NextFunction
 ): void => {
-  // 1. Ambil token dari header Authorization
-  const authHeader = req.header("Authorization");
-
-  // 2. Cek apakah header Authorization ada dan menggunakan format 'Bearer <token>'
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    res.status(401).json({ 
-      success: false,
-      message: "Access Denied: No token provided or invalid format. Please use 'Bearer <token>'" 
-    });
-    return;
-  }
-
-  // 3. Ekstrak token saja (menghapus kata 'Bearer ')
-  const token = authHeader.replace("Bearer ", "");
-
   try {
+    // 1. Ambil token dari header Authorization
+    const authHeader = req.header("Authorization");
+
+    // 2. Cek apakah header Authorization ada dan menggunakan format 'Bearer <token>'
+    if (!authHeader) {
+      return next(ApiError.unauthorized("Access Denied: No token provided"));
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      return next(ApiError.unauthorized("Access Denied: Invalid token format. Use 'Bearer <token>'"));
+    }
+
+    // 3. Ekstrak token saja (menghapus kata 'Bearer ')
+    const token = authHeader.slice(7).trim();
+
+    if (!token) {
+      return next(ApiError.unauthorized("Access Denied: Token is empty"));
+    }
+
     // 4. Verifikasi token menggunakan JWT_SECRET
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
 
     // 5. Jika valid, simpan hasil decode (payload) ke dalam req.user
     req.user = decoded;
@@ -44,13 +58,45 @@ export const authenticate = (
     // 6. Lanjutkan ke fungsi/controller berikutnya
     next();
   } catch (error) {
-    // Log error untuk keperluan internal debugging
-    console.error("JWT Verification Error:", error);
-
-    // 7. Kirim response jika token kadaluwarsa atau tidak valid
-    res.status(401).json({ 
-      success: false,
-      message: "Authentication Failed: Your session has expired or the token is invalid" 
-    });
+    // Handle JWT specific errors
+    if (error instanceof jwt.JsonWebTokenError) {
+      return next(ApiError.unauthorized("Invalid token. Please log in again."));
+    }
+    if (error instanceof jwt.TokenExpiredError) {
+      return next(ApiError.unauthorized("Your session has expired. Please log in again."));
+    }
+    // Pass other errors to error handler
+    next(error);
   }
+};
+
+/**
+ * Middleware opsional untuk route yang bisa diakses dengan atau tanpa auth
+ * Jika ada token valid, user info akan diattach ke request
+ */
+export const optionalAuth = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): void => {
+  const authHeader = req.header("Authorization");
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return next();
+  }
+
+  const token = authHeader.slice(7).trim();
+
+  if (!token) {
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
+    req.user = decoded;
+  } catch {
+    // Token invalid, tapi tidak apa-apa karena ini optional
+  }
+
+  next();
 };
